@@ -50,19 +50,21 @@ You are running as the **research-agent** persona defined in
 
 ## Task
 
-For each target issue:
+For each target issue, follow `.claude/agents/research-agent.md` exactly —
+in short:
 
 1. Read the issue and all comments.
-2. Determine the next spec number by scanning `specs/` for the highest
-   existing `NNN-` prefix.
-3. Produce the full spec directory as described in
-   `.claude/agents/research-agent.md`, using `.specify/templates/` as the
-   structural basis for each file.
-4. Open a pull request containing only the new `specs/NNN-slug/` directory
+2. Run the Spec Kit command sequence: `/speckit.specify` → `/speckit.clarify`
+   → `/speckit.plan` → `/speckit.tasks` (optionally `/speckit.checklist` and
+   `/speckit.taskstoissues` — see the persona file for when).
+3. Open a pull request containing only the new `specs/NNN-slug/` directory
    (this is a declared safe output — do not push directly to `main`).
-5. Comment on the originating issue with a 3-5 bullet summary and a link to
-   the spec PR.
-6. Update the issue: remove `needs-spec`, add `spec-in-review`.
+4. Comment on the originating issue with a 3-5 bullet summary and a link to
+   the spec PR (and any per-task issue numbers if `/speckit.taskstoissues`
+   ran).
+5. Update the issue: remove `needs-spec`, add `spec-in-review`.
 
 Do not write or modify any file outside `specs/NNN-slug/`. Do not open more
-than one PR per issue.
+than one PR per issue. If `.claude/commands/speckit.specify.md` (or any
+other `speckit.*` command file) is missing, stop and comment that Spec Kit
+isn't installed — don't fall back to freelancing the spec structure.

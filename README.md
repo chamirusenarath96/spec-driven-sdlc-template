@@ -12,7 +12,8 @@ GitHub Projects (v2), and GitHub Actions.
 
 | Piece | Where |
 |---|---|
-| Spec folder structure (spec → research → plan → tasks → contracts) | [`.specify/templates/`](.specify/templates/), populated per-feature under `specs/` |
+| Spec-driven workflow (specify → clarify → plan → tasks → implement) | Real [Spec Kit](https://github.com/github/spec-kit) `/speckit.*` commands, installed via `specify init --here` — see [docs/SETUP.md](docs/SETUP.md) |
+| Ticket/PM tool | **GitHub Issues + Projects (v2)** — no separate tool; see [docs/AGENTS.md#raising-issues](docs/AGENTS.md#raising-issues) |
 | Research / Dev / Review agent personas | [`.claude/agents/`](.claude/agents/) |
 | Agentic workflows (scheduled + event-triggered) | [`.github/workflows/agent-*.md`](.github/workflows/) (GitHub Agentic Workflows / `gh-aw`) |
 | CI + deploy → Slack | [`.github/workflows/ci.yml`](.github/workflows/ci.yml), [`deploy.yml`](.github/workflows/deploy.yml) |
@@ -22,14 +23,23 @@ GitHub Projects (v2), and GitHub Actions.
 ## Quickstart
 
 1. Click **Use this template** on GitHub (or `gh repo create my-project --template <org>/spec-driven-sdlc-template`).
-2. Follow [docs/SETUP.md](docs/SETUP.md) end to end — it walks through installing
-   `gh-aw`, wiring the `ANTHROPIC_API_KEY`/`CLAUDE_CODE_OAUTH_TOKEN` and
-   `SLACK_WEBHOOK_URL` secrets, and creating the GitHub Project.
-3. Open an issue describing a feature, label it `needs-spec`, and watch the
-   Research Agent draft `specs/001-your-feature/`.
-4. Approve the spec (label `spec-approved`) to let the Dev Agent implement it.
+2. Follow [docs/SETUP.md](docs/SETUP.md) end to end — it walks through
+   installing `gh-aw`, installing **Spec Kit** (`specify init --here`) and
+   setting your project's constitution, wiring the
+   `ANTHROPIC_API_KEY`/`CLAUDE_CODE_OAUTH_TOKEN` and `SLACK_WEBHOOK_URL`
+   secrets, and creating the GitHub Project.
+3. **Raise a feature** — open a GitHub Issue with the **Feature request**
+   template, label it `needs-spec`. That label is the only trigger; there's
+   no separate ticket tool. The Research Agent picks it up and runs
+   `/speckit.specify` → `/speckit.clarify` → `/speckit.plan` →
+   `/speckit.tasks` to draft `specs/001-your-feature/`.
+4. Approve the spec (label `spec-approved`) to let the Dev Agent run
+   `/speckit.analyze` → `/speckit.implement`.
 5. The Review Agent reviews every PR the Dev Agent opens against the spec's
    acceptance criteria.
+
+See [The full picture: issue to merge](#the-full-picture-issue-to-merge)
+below for exactly who does what, in order.
 
 ## Pipeline at a glance
 
@@ -52,6 +62,108 @@ flowchart TD
 ```
 
 See [docs/AGENTS.md](docs/AGENTS.md) for the full state machine and labels.
+
+## The full picture: issue to merge
+
+The diagram above compresses "Research Agent" and "Dev Agent" into single
+boxes. Here's what's actually happening inside each of those, and — since
+this is the question that usually trips people up — **how a feature or bug
+actually gets raised as a ticket in the first place**. There are two answers:
+a human writes the initial ask as a plain GitHub Issue (lane 2 below), and,
+once that issue has a spec with a task list, Spec Kit's own
+`/speckit.taskstoissues` command can fan `tasks.md` out into individual
+per-task GitHub issues (lane 3) — use that second path when a feature is big
+enough that its tasks deserve independent tracking; skip it for anything
+small enough to ship as one PR.
+
+```mermaid
+flowchart TB
+    subgraph Human["🧑 Human"]
+        direction TB
+        H1["Draft feature/bug idea"]
+        H2["Approve spec\n(label: spec-approved)"]
+    end
+
+    subgraph GH["🐙 GitHub Issues + Projects (the only ticket tool)"]
+        direction TB
+        G1["Issue opened\n(Feature request template)\nlabel: needs-spec\nProject: Backlog"]
+        G2["Project: Spec In Progress"]
+        G3["Spec PR opened\nProject: Spec Ready for Review"]
+        G4["Project: Approved for Dev"]
+        G5["Implementation PR opened\nProject: In Review"]
+        G6["Project: Done"]
+        G7["Project: In Development\nlabel: changes-requested"]
+    end
+
+    subgraph RA["🔎 Research Agent (agent-research.md)"]
+        direction TB
+        R1["Triggered:\nneeds-spec label\n(or scheduled sweep)"]
+        R2["/speckit.specify/"]
+        R3["/speckit.clarify/"]
+        R4["/speckit.plan/"]
+        R5["/speckit.tasks/"]
+        R6{"Big enough to\nfan out per-task?"}
+        R7["/speckit.taskstoissues/\n→ one issue per task"]
+        R8["Open spec PR\n+ comment summary"]
+    end
+
+    subgraph DA["🛠️ Dev Agent (agent-dev.md)"]
+        direction TB
+        D1["Triggered:\nspec-approved label\n(or scheduled sweep)"]
+        D2["/speckit.analyze/\n(gap check, read-only)"]
+        D3["/speckit.implement/\ncode + tests"]
+        D4["Open implementation PR"]
+    end
+
+    subgraph RV["✅ Review Agent (agent-review.md)"]
+        direction TB
+        V1["Triggered:\nPR opened/synced"]
+        V2["Diff vs spec's\nacceptance criteria"]
+        V3{"Criteria met\n+ tests pass?"}
+        V4["Approve + merge"]
+        V5["Request changes"]
+    end
+
+    H1 --> G1
+    G1 --> R1 --> G2
+    G2 --> R2 --> R3 --> R4 --> R5 --> R6
+    R6 -->|yes| R7 --> R8
+    R6 -->|no| R8
+    R8 --> G3
+    G3 --> H2 --> G4
+    G4 --> D1 --> D2 --> D3 --> D4
+    D4 --> G5
+    G5 --> V1 --> V2 --> V3
+    V3 -->|yes| V4 --> G6
+    V3 -->|no| V5 --> G7
+    G7 -.->|next scheduled run| D1
+
+    style G1 fill:#1f6feb,color:#fff
+    style G3 fill:#1f6feb,color:#fff
+    style G5 fill:#1f6feb,color:#fff
+    style G6 fill:#16a34a,color:#fff
+    style G7 fill:#b45309,color:#fff
+    style R7 fill:#7c3aed,color:#fff
+```
+
+Read it lane by lane:
+
+- **Human** — only two required actions: write the original ask, and
+  approve the resulting spec. Everything else is optional oversight.
+- **GitHub Issues + Projects** — the entire "ticket system." An issue's
+  labels and its linked Project item are the complete state; there's nothing
+  else to keep in sync.
+- **Research Agent** — turns a raw issue into a spec by literally running
+  Spec Kit's own commands in sequence, not by improvising a file layout.
+  `/speckit.taskstoissues` is the one optional branch: it's Spec Kit's
+  built-in mechanism for turning `tasks.md` into individual GitHub issues
+  when a feature is too big for one PR.
+- **Dev Agent** — `/speckit.analyze` first (a read-only sanity check against
+  the spec and the constitution), then `/speckit.implement` does the actual
+  build. If analyze finds a real contradiction, the agent stops and comments
+  rather than pushing through it.
+- **Review Agent** — the one piece with no Spec Kit command backing it; it's
+  a plain diff-vs-acceptance-criteria review, this template's own addition.
 
 ## How the workflows actually run
 

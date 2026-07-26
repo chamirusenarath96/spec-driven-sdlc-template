@@ -49,14 +49,18 @@ You are running as the **dev-agent** persona defined in
 
 ## Task
 
-1. Read `specs/NNN-slug/spec.md`, `plan.md`, `data-model.md` (if present),
-   `contracts/` (if present), and `tasks.md`.
-2. Implement per `.claude/agents/dev-agent.md`'s process: work `tasks.md` in
-   order, write tests for every acceptance criterion, run the full test
-   suite and linter before opening a PR.
-3. Open a PR linking the issue (`Closes #<issue>`) and the spec directory.
-4. Update the issue: remove `spec-approved`, add `in-review`.
+Follow `.claude/agents/dev-agent.md` exactly — in short:
 
-If the test suite or linter cannot be run in this environment (missing
-tooling), say so explicitly in the PR description rather than claiming tests
-passed.
+1. Check out the spec's feature branch and read `spec.md`, `plan.md`,
+   `data-model.md` (if present), `contracts/` (if present), and `tasks.md`.
+2. Run `/speckit.analyze` first — stop and comment on the issue if it
+   surfaces a real gap rather than pushing through it.
+3. Run `/speckit.implement` to build the feature and its tests.
+4. Run the full test suite and linter locally before opening a PR.
+5. Open a PR linking the issue (`Closes #<issue>`) and the spec directory.
+6. Update the issue: remove `spec-approved`, add `in-review`.
+
+If `.claude/commands/speckit.implement.md` is missing, stop and comment that
+Spec Kit isn't installed rather than implementing freehand. If the test
+suite or linter cannot be run in this environment (missing tooling), say so
+explicitly in the PR description rather than claiming tests passed.

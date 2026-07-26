@@ -44,6 +44,22 @@ because approving/merging a PR and moving a Project item aren't covered by
 the built-in safe-output set — implement that job per the
 [Custom Safe Outputs reference](https://github.github.com/gh-aw/reference/custom-safe-outputs/).
 
+### Spec Kit dependency
+
+`agent-research.md` and `agent-dev.md` invoke real
+[Spec Kit](https://github.com/github/spec-kit) slash commands
+(`/speckit.specify`, `/speckit.plan`, `/speckit.implement`, etc. — see
+`.claude/agents/research-agent.md` and `dev-agent.md`). The runner does
+**not** need the `specify` CLI installed at workflow-run time: `specify init
+--here` (a one-time local step, see [SETUP.md](SETUP.md)) writes the actual
+command files into `.claude/commands/speckit.*.md`, and those get committed
+to the repo like any other file. Claude Code reads them the same way in a
+GitHub Actions runner as it would in your terminal. If those command files
+are missing (Spec Kit was never installed), the agents will fail to find
+`.claude/commands/speckit.*.md` and stop rather than improvise the spec
+structure by hand — that's deliberate, not a bug to work around by re-adding
+freeform templates.
+
 ### Budget controls already in place
 
 - Scheduled sweeps cap how many issues/PRs get processed per run (2 for
