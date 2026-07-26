@@ -28,12 +28,6 @@ safe-outputs:
   add-comment: {}
   update-issue:
     target: "triggering"
-  custom:
-    - id: slack-notify
-      description: >
-        Post a milestone summary to the project's Slack channel via
-        .github/actions/slack-notify. Purely informational, no code/issue
-        write.
 
 timeout_minutes: 45
 ---
@@ -71,15 +65,8 @@ Spec Kit isn't installed rather than implementing freehand. If the test
 suite or linter cannot be run in this environment (missing tooling), say so
 explicitly in the PR description rather than claiming tests passed.
 
-## Slack notification
-
-After opening the implementation PR, emit the `slack-notify` safe output
-with:
-
-- `status: success` if tests passed, `warning` if you had to note a
-  deviation from `plan.md`, `failure` if you're stopping without a PR
-- `title`: `"Implementation PR opened — <spec slug>"`
-- `summary`: link to the PR and the issue it closes
-- `fields`: tasks completed / total, test pass count, and whether a
-  migration was included
+Slack notifications for this workflow are handled entirely outside this
+agent — `.github/workflows/agent-notify.yml` watches for a PR labeled
+`agent-generated` opening and posts to Slack deterministically. You don't
+need to compose or trigger anything Slack-related yourself.
 

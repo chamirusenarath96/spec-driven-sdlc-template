@@ -16,10 +16,11 @@ GitHub Projects (v2), and GitHub Actions.
 | Ticket/PM tool | **GitHub Issues + Projects (v2)** — no separate tool; see [docs/AGENTS.md#raising-issues](docs/AGENTS.md#raising-issues) |
 | Research / Dev / Review agent personas | [`.claude/agents/`](.claude/agents/) |
 | Agentic workflows (scheduled + event-triggered) | [`.github/workflows/agent-*.md`](.github/workflows/) (GitHub Agentic Workflows / `gh-aw`) |
-| CI, deploy, perf, and daily digest → Slack | [`ci.yml`](.github/workflows/ci.yml), [`deploy.yml`](.github/workflows/deploy.yml), [`perf.yml`](.github/workflows/perf.yml), [`project-digest.yml`](.github/workflows/project-digest.yml), via one shared [`slack-notify` action](.github/actions/slack-notify/action.yml) |
+| CI, deploy, perf, digest, and agent milestones → Slack | [`ci.yml`](.github/workflows/ci.yml), [`deploy.yml`](.github/workflows/deploy.yml), [`perf.yml`](.github/workflows/perf.yml), [`project-digest.yml`](.github/workflows/project-digest.yml), [`agent-notify.yml`](.github/workflows/agent-notify.yml), via one shared [`slack-notify` action](.github/actions/slack-notify/action.yml) |
 | Project board state machine | [`docs/PROJECT_SETUP.md`](docs/PROJECT_SETUP.md) |
 | Full pipeline docs | [`docs/AGENTS.md`](docs/AGENTS.md), [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) |
 | Getting started | [`docs/SETUP.md`](docs/SETUP.md) — tool-by-tool checklist with expected results at each step |
+| Every key/secret this repo uses | [`.env.example`](.env.example) — one file listing what each is for and where it's actually consumed |
 
 ## Quickstart
 
@@ -216,7 +217,9 @@ instead of a built-in one.
 
 One Slack channel, fed by five sources, all going through the same reusable
 [`.github/actions/slack-notify`](.github/actions/slack-notify/action.yml)
-composite action so every message looks and behaves consistently:
+composite action so every message looks and behaves consistently — and all
+five are **plain, deterministic GitHub Actions workflows**, none of them
+dependent on an agent choosing to emit anything:
 
 | Source | Fires on | Carries |
 |---|---|---|
@@ -224,21 +227,25 @@ composite action so every message looks and behaves consistently:
 | **Deploy** (`deploy.yml`) | Push to `main` | Environment, commit, deployed URL |
 | **Performance** (`perf.yml`) | Weekly cron / app-code push / manual | p50/p95 latency, throughput, bundle size |
 | **Project digest** (`project-digest.yml`) | Weekdays, after the agent sweeps | Issues awaiting spec/review/dev, open PRs, PRs merged in 24h |
-| **Agent milestones** (`agent-research.md`, `agent-dev.md`, `agent-review.md`) | Spec drafted, implementation PR opened, PR approved/changes-requested | Spec/PR links, acceptance criteria met, task/test counts |
+| **Agent milestones** (`agent-notify.yml`) | A PR labeled `spec`/`agent-generated` opens; a review is submitted on one | Spec/PR link, author, reviewer, review verdict |
 
-The first four are plain Actions steps that call the composite action
-directly. The three agent workflows can't — they run read-only — so they
-declare a `slack-notify` entry under `safe-outputs.custom` instead and the
-persona instructs the agent what to put in it; you still need to write the
-consuming job that turns that safe output into an actual
-`slack-notify` call, since gh-aw's custom-safe-output schema is still
-evolving in public preview. See
-[docs/WORKFLOWS.md#slack-notifications](docs/WORKFLOWS.md#slack-notifications)
-for the exact wiring and example payloads.
+`agent-notify.yml` is deliberately a separate, plain workflow — not part of
+`agent-research.md`/`agent-dev.md`/`agent-review.md`. An earlier version of
+this template had those three gh-aw workflows emit the Slack message
+themselves via a custom safe-output, but that meant the notification (and
+its accuracy) depended on the agent's own run reaching that instruction and
+self-reporting correctly. Instead, `agent-notify.yml` triggers on the real
+`pull_request`/`pull_request_review` GitHub events and reads the actual
+event payload (PR title, review state) — it fires the same way whether an
+agent or a human did the work, and can't silently no-op just because a run
+timed out. See
+[docs/WORKFLOWS.md#why-agent-milestones-arent-emitted-by-the-agent](docs/WORKFLOWS.md#why-agent-milestones-arent-emitted-by-the-agent)
+for the full reasoning.
 
 Every caller checks `secrets.SLACK_WEBHOOK_URL != ''` first — skip setting
 the secret and every notification silently no-ops instead of failing the
-workflow.
+workflow. See [`.env.example`](.env.example) for every key/secret this repo
+uses in one place.
 
 ## Status
 

@@ -20,6 +20,10 @@ Nothing above is optional if you want the full pipeline working — but you
 can stop after step 3 and just have a normal CI-only repo with none of the
 agent automation, if that's all you need right now.
 
+Every secret/key any of this needs is listed in one place in
+[`.env.example`](../.env.example) — check there if you're ever unsure what
+a workflow expects.
+
 ## 1. Clone and rename
 
 ```bash
@@ -104,6 +108,11 @@ exactly what gets posted and when.
 
 ## 6. Set repo secrets
 
+Every key this template uses — what it's for, and whether you need it
+locally at all — is listed in [`.env.example`](../.env.example). None of
+these are read from a `.env` file at workflow runtime; GitHub Actions only
+sees repo secrets, set like this:
+
 ```bash
 gh secret set ANTHROPIC_API_KEY          # or CLAUDE_CODE_OAUTH_TOKEN
 gh secret set SLACK_WEBHOOK_URL          # the URL from step 5
@@ -112,7 +121,10 @@ gh secret set SLACK_WEBHOOK_URL          # the URL from step 5
 **Expect:** `gh secret list` shows both. Every workflow that posts to Slack
 checks `secrets.SLACK_WEBHOOK_URL != ''` first and silently skips the
 notification if it's unset — so you can defer step 5/6 and everything else
-still runs, just without Slack messages.
+still runs, just without Slack messages. If you also need these values
+locally (running the app itself, testing a workflow with `act`), copy
+`.env.example` to `.env` and fill it in there — `.env` is already
+gitignored, never commit it.
 
 ## 7. Create the GitHub Project
 
@@ -141,15 +153,21 @@ Settings → Branches.
    Run workflow) rather than waiting for the schedule, pointing it at that
    issue number.
 3. **Expect:** it ran `/speckit.specify` → `/speckit.clarify` →
-   `/speckit.plan` → `/speckit.tasks`, opened a `specs/001-.../` PR,
-   commented on the issue, and (if step 5/6 are done) a Slack message
-   titled "Spec drafted — …" landed in your channel.
+   `/speckit.plan` → `/speckit.tasks`, opened a `specs/001-.../` PR labeled
+   `spec`, and commented on the issue. That PR opening is what triggers
+   `agent-notify.yml` — if step 5/6 are done, a "Spec drafted" Slack message
+   lands in your channel within a few seconds, independent of the research
+   agent run itself (see [WORKFLOWS.md](WORKFLOWS.md#why-agent-milestones-arent-emitted-by-the-agent)
+   for why it's wired this way).
 4. Label the issue `spec-approved`, dispatch `agent-dev.md`.
-   **Expect:** it ran `/speckit.analyze` → `/speckit.implement`, opened an
-   implementation PR, and posted "Implementation PR opened — …" to Slack.
+   **Expect:** it ran `/speckit.analyze` → `/speckit.implement` and opened
+   an implementation PR labeled `agent-generated`, which triggers
+   `agent-notify.yml`'s "Implementation PR opened" message.
 5. **Expect:** `agent-review.md` fires automatically on that PR (it's
-   PR-event triggered, no manual dispatch needed), leaves a review, and
-   posts "PR approved" or "Changes requested" to Slack.
+   PR-event triggered, no manual dispatch needed) and leaves a review.
+   The review being submitted (whether approved or changes-requested)
+   triggers `agent-notify.yml`'s "PR approved" / "Changes requested"
+   message.
 6. Push a commit to `main` (or open the PR against it).
    **Expect:** `ci.yml` runs and posts a CI status message with real test
    counts once you've filled in step 2's TODOs.

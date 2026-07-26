@@ -72,31 +72,33 @@ freeform templates.
   default, since it adds complexity this template doesn't assume you need
   yet.
 
-## CI / Deploy / Perf / Digest (plain GitHub Actions)
+## CI / Deploy / Perf / Digest / Agent-Notify (plain GitHub Actions)
 
-`ci.yml`, `deploy.yml`, `perf.yml`, and `project-digest.yml` are ordinary
-GitHub Actions — no agent involvement, no compile step. Fill in the `TODO`
-steps in the first three for your actual stack; `project-digest.yml` needs
-no stack-specific changes, it only reads issue/PR/label counts via `gh`.
+`ci.yml`, `deploy.yml`, `perf.yml`, `project-digest.yml`, and
+`agent-notify.yml` are ordinary GitHub Actions — no agent involvement, no
+compile step. Fill in the `TODO` steps in `ci.yml`/`deploy.yml`/`perf.yml`
+for your actual stack; `project-digest.yml` and `agent-notify.yml` need no
+stack-specific changes.
 
 ## Slack notifications
 
-Every notification in this repo — agent milestones included — goes through
-one reusable composite action,
+Every notification in this repo goes through one reusable composite action,
 [`.github/actions/slack-notify`](../.github/actions/slack-notify/action.yml),
 so they all look and behave the same way (same Block Kit shape, same
 `status` → emoji mapping, same "skip silently if `SLACK_WEBHOOK_URL` isn't
-set" behavior). There are five sources:
+set" behavior). There are five sources, and **all five are plain,
+deterministic Actions steps — none of them depend on an agent deciding to
+emit anything**:
 
-| Source | Workflow | When | Example content |
+| Source | Workflow | Fires on | Example content |
 |---|---|---|---|
 | CI status | `ci.yml` | Every push/PR | ✅/❌, tests passed/failed/total, coverage %, duration, link to run |
 | Deploy status | `deploy.yml` | Every push to `main` | ✅/❌, environment, commit, deployed URL |
 | Performance benchmark | `perf.yml` | Weekly cron, or push to app code, or manual | p50/p95 latency, throughput, bundle size |
 | Project digest | `project-digest.yml` | Weekdays, after the agent sweeps | Issues awaiting spec / in review / approved, open PRs, PRs merged in last 24h |
-| Agent milestone | `agent-research.md`, `agent-dev.md`, `agent-review.md` (via `slack-notify` custom safe output) | Spec drafted, implementation PR opened, PR approved/changes-requested | Spec/PR link, acceptance criteria met, task/test counts |
+| Agent milestone | `agent-notify.yml` | A PR labeled `spec` or `agent-generated` opens; a review is submitted on one | Spec/PR link, author, reviewer, review verdict |
 
-The first four call the composite action directly as a normal Actions step:
+Every one of them calls the composite action the same way:
 
 ```yaml
 - name: Notify Slack
@@ -111,27 +113,42 @@ The first four call the composite action directly as a normal Actions step:
     link: "..."
 ```
 
-The agent workflows can't call it directly — they run with read-only
-`permissions:` and can only act through declared safe outputs. Each of
-`agent-research.md`, `agent-dev.md`, and `agent-review.md` declares a
-`slack-notify` entry under `safe-outputs.custom` (see each file's
-frontmatter) and its body instructs the agent what to put in the
-notification. **You still need to implement the consuming job** — the job
-gh-aw runs when an agent emits that safe output — as a step that takes the
-structured payload the agent produced and calls
-`.github/actions/slack-notify` with it, the same way `ci.yml` does. See the
-[Custom Safe Outputs reference](https://github.github.com/gh-aw/reference/custom-safe-outputs/)
-for the exact wiring; this template declares the safe output and the
-agent-side instructions but leaves the consuming job's YAML for you to add
-once you've run `gh aw compile` against your installed `gh-aw` version, since
-its exact schema has moved during public preview.
+### Why agent milestones aren't emitted by the agent
+
+An earlier version of this template had `agent-research.md`, `agent-dev.md`,
+and `agent-review.md` each declare a `slack-notify` custom safe-output and
+instructed the agent to emit it with a self-composed summary. That's a
+weaker design and this template no longer does it, on purpose:
+
+- **Reliability** — a custom safe-output only fires if the agent's run
+  reaches that instruction. A run that errors, times out, or gets a
+  `timeout_minutes` cutoff produces silence instead of a message. A plain
+  Actions trigger (`pull_request: types: [opened]`,
+  `pull_request_review: types: [submitted]`) fires whenever the real GitHub
+  state changes, independent of whether the agent run that caused it
+  finished cleanly.
+- **Trustworthiness of content** — an agent-composed notification reports
+  what the agent *believes* it did. `agent-notify.yml` instead reads the
+  actual event payload (`github.event.pull_request.title`,
+  `github.event.review.state`, etc.) — the same facts a human clicking
+  around GitHub would see, not a self-report.
+- **It doesn't care who did the work** — because `agent-notify.yml` triggers
+  on labels (`spec`, `agent-generated`) and the real
+  `pull_request_review` event, it fires identically whether the Research/
+  Dev/Review Agent did the work or a human did the exact same steps by
+  hand. An agent-emitted safe-output would only fire for the agent path.
+
+The three `agent-*.md` personas no longer declare or mention `slack-notify`
+at all — see the "Slack notification" note at the end of each file's body,
+which just points here.
 
 ## Required secrets
 
 | Secret | Used by | Purpose |
 |---|---|---|
 | `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` | `agent-*.md` workflows | Runs Claude Code as the workflow engine |
-| `SLACK_WEBHOOK_URL` | `ci.yml`, `deploy.yml`, `perf.yml`, `project-digest.yml`, and each `agent-*.md`'s `slack-notify` safe-output job | Posts to your project's Slack channel — every caller checks it's set and skips the notification silently if not |
+| `SLACK_WEBHOOK_URL` | `ci.yml`, `deploy.yml`, `perf.yml`, `project-digest.yml`, `agent-notify.yml` | Posts to your project's Slack channel — every caller checks it's set and skips the notification silently if not |
 | `GITHUB_TOKEN` (default) | all workflows | Standard Actions token; `gh-aw` safe-outputs and `project-digest.yml`'s `gh` calls use this |
 
-None of these are set in this template — see [SETUP.md](SETUP.md).
+See [`.env.example`](../.env.example) for the same list with local-dev
+notes, and [SETUP.md](SETUP.md) for how to actually set each one.

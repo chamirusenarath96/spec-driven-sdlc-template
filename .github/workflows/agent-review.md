@@ -32,11 +32,6 @@ safe-outputs:
       description: >
         Submit a PR review (approve or request changes) and update the
         linked GitHub Project item's status field accordingly.
-    - id: slack-notify
-      description: >
-        Post a milestone summary to the project's Slack channel via
-        .github/actions/slack-notify. Purely informational, no code/issue
-        write.
 
 timeout_minutes: 20
 ---
@@ -70,13 +65,11 @@ Target PR is `${{ github.event.pull_request.number }}` (or the
 Never approve a PR that removes or weakens tests without an explicit,
 justified reason stated in the PR description.
 
-## Slack notification
-
-After the `pr-review-decision` safe output, also emit `slack-notify` with:
-
-- `status: success` on approve, `warning` on request-changes
-- `title`: `"PR approved"` or `"Changes requested"` + the PR title
-- `summary`: link to the PR
-- `fields`: acceptance criteria met/total, and — on request-changes — a
-  short list of which criteria are unmet
+Slack notifications for this workflow are handled entirely outside this
+agent — `.github/workflows/agent-notify.yml` watches for a review being
+submitted on an `agent-generated` PR (via the real GitHub
+`pull_request_review` event, regardless of who/what submitted it) and posts
+to Slack deterministically, reading the review's actual `state` (`approved`
+vs `changes_requested`) rather than trusting a self-report. You don't need
+to compose or trigger anything Slack-related yourself.
 
