@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- Replace this block with your stack's real setup/install/test ---
+      - name: Set up toolchain
+        run: echo "TODO: set up language runtime (node/python/go/...)"
+      - name: Install dependencies
+        run: echo "TODO: install dependencies"
+      - name: Lint
+        run: echo "TODO: run linter"
+      - name: Test
+        run: echo "TODO: run test suite"
+      # ----------------------------------------------------------------
+
+  notify:
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Slack
+        if: env.SLACK_WEBHOOK_URL != ''
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        uses: slackapi/slack-github-action@v2.0.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
+          payload: |
+            {
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "${{ needs.test.result == 'success' && ':white_check_mark:' || ':x:' }} *CI ${{ needs.test.result }}* — <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|${{ github.repository }}> on `${{ github.ref_name }}`\n${{ github.event.head_commit.message || github.event.pull_request.title }}"
+                  }
+                }
+              ]
+            }
