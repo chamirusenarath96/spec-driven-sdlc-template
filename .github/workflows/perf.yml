@@ -1,0 +1,59 @@
+name: Performance Benchmarks
+
+on:
+  schedule:
+    # Weekly, offset from the agent cron sweeps in agent-*.md so nothing
+    # competes for the same rate-limit window.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      # Adjust to wherever your actual application code lives — this repo
+      # ships no app code, so this path is a placeholder.
+      - "src/**"
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # --- Replace with your real benchmark command ---
+      - name: Run benchmarks
+        id: bench
+        run: |
+          echo "TODO: run your real benchmark suite and produce these outputs."
+          # Most load-testing / benchmark tools (k6, autocannon, pytest-
+          # benchmark, hyperfine --export-json, wrk2) can emit a JSON report
+          # you jq straight into these four numbers. Example with k6:
+          #   k6 run --summary-export=summary.json script.js
+          #   p50=$(jq '.metrics.http_req_duration.values.p(50)' summary.json)
+          #   p95=$(jq '.metrics.http_req_duration.values.p(95)' summary.json)
+          #   throughput=$(jq '.metrics.http_reqs.values.rate' summary.json)
+          # Bundle size (for frontend projects): du -sh dist/ or your
+          # bundler's own size-report output.
+          echo "p50=n/a" >> "$GITHUB_OUTPUT"
+          echo "p95=n/a" >> "$GITHUB_OUTPUT"
+          echo "throughput=n/a" >> "$GITHUB_OUTPUT"
+          echo "bundle=n/a" >> "$GITHUB_OUTPUT"
+          echo "verdict=info" >> "$GITHUB_OUTPUT"
+      # -------------------------------------------------
+
+      - name: Notify Slack
+        if: always() && secrets.SLACK_WEBHOOK_URL != ''
+        uses: ./.github/actions/slack-notify
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          status: ${{ steps.bench.outputs.verdict }}
+          title: "Performance benchmark — ${{ github.repository }}"
+          summary: "Run on `${{ github.ref_name }}`@`${{ github.sha }}`"
+          fields: |
+            [
+              {"label": "p50 latency", "value": "${{ steps.bench.outputs.p50 }} ms"},
+              {"label": "p95 latency", "value": "${{ steps.bench.outputs.p95 }} ms"},
+              {"label": "Throughput", "value": "${{ steps.bench.outputs.throughput }} req/s"},
+              {"label": "Bundle size", "value": "${{ steps.bench.outputs.bundle }} KB"}
+            ]
+          link: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          link-text: "View benchmark run"

@@ -9,31 +9,34 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     environment: production
+    outputs:
+      result: ${{ steps.deploy.outcome }}
+      url: ${{ steps.deploy.outputs.url }}
     steps:
       - uses: actions/checkout@v4
 
       # --- Replace with your real deploy steps (Vercel/Fly/ECS/...) ---
       - name: Deploy
-        run: echo "TODO: deploy"
+        id: deploy
+        run: |
+          echo "TODO: deploy"
+          echo "url=https://example.com" >> "$GITHUB_OUTPUT"
       # ------------------------------------------------------------
 
       - name: Notify Slack
-        if: always()
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        uses: slackapi/slack-github-action@v2.0.0
+        if: always() && secrets.SLACK_WEBHOOK_URL != ''
+        uses: ./.github/actions/slack-notify
         with:
-          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
-          webhook-type: incoming-webhook
-          payload: |
-            {
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "${{ job.status == 'success' && ':rocket:' || ':x:' }} *Deploy ${{ job.status }}* — <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|${{ github.repository }}>@`${{ github.sha }}`"
-                  }
-                }
-              ]
-            }
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          status: ${{ job.status == 'success' && 'success' || 'failure' }}
+          title: "Deploy ${{ job.status }} — ${{ github.repository }}"
+          summary: "`${{ github.sha }}` deployed to **production**"
+          fields: |
+            [
+              {"label": "Environment", "value": "production"},
+              {"label": "Commit", "value": "<${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{ github.sha }}>"},
+              {"label": "URL", "value": "${{ steps.deploy.outputs.url }}"},
+              {"label": "Triggered by", "value": "${{ github.actor }}"}
+            ]
+          link: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          link-text: "View deploy run"

@@ -16,9 +16,10 @@ GitHub Projects (v2), and GitHub Actions.
 | Ticket/PM tool | **GitHub Issues + Projects (v2)** — no separate tool; see [docs/AGENTS.md#raising-issues](docs/AGENTS.md#raising-issues) |
 | Research / Dev / Review agent personas | [`.claude/agents/`](.claude/agents/) |
 | Agentic workflows (scheduled + event-triggered) | [`.github/workflows/agent-*.md`](.github/workflows/) (GitHub Agentic Workflows / `gh-aw`) |
-| CI + deploy → Slack | [`.github/workflows/ci.yml`](.github/workflows/ci.yml), [`deploy.yml`](.github/workflows/deploy.yml) |
+| CI, deploy, perf, and daily digest → Slack | [`ci.yml`](.github/workflows/ci.yml), [`deploy.yml`](.github/workflows/deploy.yml), [`perf.yml`](.github/workflows/perf.yml), [`project-digest.yml`](.github/workflows/project-digest.yml), via one shared [`slack-notify` action](.github/actions/slack-notify/action.yml) |
 | Project board state machine | [`docs/PROJECT_SETUP.md`](docs/PROJECT_SETUP.md) |
 | Full pipeline docs | [`docs/AGENTS.md`](docs/AGENTS.md), [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) |
+| Getting started | [`docs/SETUP.md`](docs/SETUP.md) — tool-by-tool checklist with expected results at each step |
 
 ## Quickstart
 
@@ -171,9 +172,9 @@ Two different mechanisms are at play, and they're easy to conflate:
 
 ```mermaid
 flowchart LR
-    subgraph plain["Plain GitHub Actions — ci.yml / deploy.yml"]
+    subgraph plain["Plain GitHub Actions — ci/deploy/perf/digest.yml"]
         direction TB
-        P1["push / pull_request event"] --> P2["runner executes YAML directly\n(no compile step)"] --> P3["test / build / deploy"] --> P4["POST to Slack webhook\n(Block Kit message)"]
+        P1["push / pull_request / cron event"] --> P2["runner executes YAML directly\n(no compile step)"] --> P3["test / build / deploy / benchmark\n/ gather issue+PR stats"] --> P4["slack-notify composite action\n→ POST to Slack webhook"]
     end
 
     subgraph agentic["Agentic workflows — agent-*.md (gh-aw)"]
@@ -210,6 +211,34 @@ stalls:
 See [docs/WORKFLOWS.md](docs/WORKFLOWS.md) for the full trigger table, the
 required secrets, and why `agent-review.md` needs a `custom` safe-output job
 instead of a built-in one.
+
+## Slack notifications
+
+One Slack channel, fed by five sources, all going through the same reusable
+[`.github/actions/slack-notify`](.github/actions/slack-notify/action.yml)
+composite action so every message looks and behaves consistently:
+
+| Source | Fires on | Carries |
+|---|---|---|
+| **CI** (`ci.yml`) | Every push/PR | Pass/fail, test counts, coverage %, duration |
+| **Deploy** (`deploy.yml`) | Push to `main` | Environment, commit, deployed URL |
+| **Performance** (`perf.yml`) | Weekly cron / app-code push / manual | p50/p95 latency, throughput, bundle size |
+| **Project digest** (`project-digest.yml`) | Weekdays, after the agent sweeps | Issues awaiting spec/review/dev, open PRs, PRs merged in 24h |
+| **Agent milestones** (`agent-research.md`, `agent-dev.md`, `agent-review.md`) | Spec drafted, implementation PR opened, PR approved/changes-requested | Spec/PR links, acceptance criteria met, task/test counts |
+
+The first four are plain Actions steps that call the composite action
+directly. The three agent workflows can't — they run read-only — so they
+declare a `slack-notify` entry under `safe-outputs.custom` instead and the
+persona instructs the agent what to put in it; you still need to write the
+consuming job that turns that safe output into an actual
+`slack-notify` call, since gh-aw's custom-safe-output schema is still
+evolving in public preview. See
+[docs/WORKFLOWS.md#slack-notifications](docs/WORKFLOWS.md#slack-notifications)
+for the exact wiring and example payloads.
+
+Every caller checks `secrets.SLACK_WEBHOOK_URL != ''` first — skip setting
+the secret and every notification silently no-ops instead of failing the
+workflow.
 
 ## Status
 

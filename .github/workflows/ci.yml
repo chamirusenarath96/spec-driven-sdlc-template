@@ -8,6 +8,12 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    outputs:
+      passed: ${{ steps.test.outputs.passed }}
+      failed: ${{ steps.test.outputs.failed }}
+      total: ${{ steps.test.outputs.total }}
+      coverage: ${{ steps.test.outputs.coverage }}
+      duration: ${{ steps.test.outputs.duration }}
     steps:
       - uses: actions/checkout@v4
 
@@ -18,8 +24,36 @@ jobs:
         run: echo "TODO: install dependencies"
       - name: Lint
         run: echo "TODO: run linter"
+
       - name: Test
-        run: echo "TODO: run test suite"
+        id: test
+        run: |
+          echo "TODO: run your real test command here."
+          # Whatever you run, produce these four outputs so the Slack
+          # notification below carries real numbers instead of placeholders.
+          # Most test runners can emit a JSON summary you can jq straight
+          # into these — for example, Jest's --json flag:
+          #   npx jest --json --outputFile=test-results.json
+          #   passed=$(jq '.numPassedTests' test-results.json)
+          #   failed=$(jq '.numFailedTests' test-results.json)
+          #   total=$(jq '.numTotalTests' test-results.json)
+          # ...or pytest with pytest-json-report, go test -json, etc.
+          # Coverage: pull the percentage your coverage tool reports
+          # (lcov, coverage.py, go tool cover) into a single number.
+          start=$SECONDS
+          passed=0
+          failed=0
+          total=0
+          coverage="n/a"
+          duration="$((SECONDS - start))s"
+
+          {
+            echo "passed=$passed"
+            echo "failed=$failed"
+            echo "total=$total"
+            echo "coverage=$coverage"
+            echo "duration=$duration"
+          } >> "$GITHUB_OUTPUT"
       # ----------------------------------------------------------------
 
   notify:
@@ -27,23 +61,23 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Notify Slack
-        if: env.SLACK_WEBHOOK_URL != ''
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-        uses: slackapi/slack-github-action@v2.0.0
+        if: secrets.SLACK_WEBHOOK_URL != ''
+        uses: ./.github/actions/slack-notify
         with:
-          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
-          webhook-type: incoming-webhook
-          payload: |
-            {
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "${{ needs.test.result == 'success' && ':white_check_mark:' || ':x:' }} *CI ${{ needs.test.result }}* — <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|${{ github.repository }}> on `${{ github.ref_name }}`\n${{ github.event.head_commit.message || github.event.pull_request.title }}"
-                  }
-                }
-              ]
-            }
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          status: ${{ needs.test.result == 'success' && 'success' || 'failure' }}
+          title: "CI ${{ needs.test.result }} — ${{ github.repository }}@${{ github.ref_name }}"
+          summary: >-
+            <${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}|${{
+            github.event.head_commit.message || github.event.pull_request.title }}>
+          fields: |
+            [
+              {"label": "Tests", "value": "${{ needs.test.outputs.passed }} passed / ${{ needs.test.outputs.failed }} failed / ${{ needs.test.outputs.total }} total"},
+              {"label": "Coverage", "value": "${{ needs.test.outputs.coverage }}"},
+              {"label": "Duration", "value": "${{ needs.test.outputs.duration }}"},
+              {"label": "Triggered by", "value": "${{ github.actor }}"}
+            ]
+          link: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          link-text: "View CI run"

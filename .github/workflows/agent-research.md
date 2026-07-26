@@ -30,6 +30,13 @@ safe-outputs:
   add-comment: {}
   update-issue:
     target: "triggering"
+  custom:
+    - id: slack-notify
+      description: >
+        Post a milestone summary to the project's Slack channel via
+        .github/actions/slack-notify (see docs/WORKFLOWS.md for how the
+        consuming job is implemented). Not a code/issue write — purely
+        informational.
 
 timeout_minutes: 20
 ---
@@ -68,3 +75,15 @@ Do not write or modify any file outside `specs/NNN-slug/`. Do not open more
 than one PR per issue. If `.claude/commands/speckit.specify.md` (or any
 other `speckit.*` command file) is missing, stop and comment that Spec Kit
 isn't installed — don't fall back to freelancing the spec structure.
+
+## Slack notification
+
+After opening the spec PR (or, if you found nothing to do on a scheduled
+run, skip this), emit the `slack-notify` safe output with:
+
+- `status: success`
+- `title`: `"Spec drafted — <issue title>"`
+- `summary`: one line linking the issue and the new spec PR
+- `fields`: the spec number, the acceptance-criteria count, and — if you ran
+  `/speckit.taskstoissues` — how many per-task issues were created
+

@@ -1,0 +1,101 @@
+name: Slack Notify
+description: >
+  Posts a structured Block Kit summary message to the project's Slack
+  channel via an incoming webhook. Used by ci.yml, deploy.yml, perf.yml,
+  project-digest.yml, and the agent workflows' slack-notify safe-output job,
+  so every notification in this repo looks and behaves the same way.
+
+inputs:
+  webhook-url:
+    description: Slack incoming webhook URL. Pass secrets.SLACK_WEBHOOK_URL from the caller.
+    required: true
+  status:
+    description: "One of: success, failure, warning, info — controls the emoji prefix."
+    required: true
+  title:
+    description: Message title, e.g. "CI passed" or "Weekly project digest".
+    required: true
+  summary:
+    description: One or two lines of body text. Slack mrkdwn syntax (e.g. <url|text> for links).
+    required: true
+  fields:
+    description: >
+      JSON array of {"label": "...", "value": "..."} objects, rendered as a
+      two-column fields block. Pass "[]" (the default) to omit.
+    required: false
+    default: "[]"
+  link:
+    description: Optional URL for a "view details" button.
+    required: false
+    default: ""
+  link-text:
+    description: Button text when `link` is set.
+    required: false
+    default: View details
+
+runs:
+  using: composite
+  steps:
+    - name: Build Slack Block Kit payload
+      shell: bash
+      # Every input is passed via `env:`, not interpolated into the script
+      # body — several of these (title/summary in particular) can carry
+      # attacker-controlled text (e.g. a PR title from ci.yml). Splicing
+      # `${{ inputs.* }}` directly into a `run:` script instead of through
+      # `env:` is a known GitHub Actions script-injection vector; don't
+      # reintroduce that if you touch this step.
+      env:
+        NOTIFY_STATUS: ${{ inputs.status }}
+        NOTIFY_TITLE: ${{ inputs.title }}
+        NOTIFY_SUMMARY: ${{ inputs.summary }}
+        NOTIFY_FIELDS_JSON: ${{ inputs.fields }}
+        NOTIFY_LINK: ${{ inputs.link }}
+        NOTIFY_LINK_TEXT: ${{ inputs.link-text }}
+      run: |
+        set -euo pipefail
+
+        case "$NOTIFY_STATUS" in
+          success) emoji=":white_check_mark:" ;;
+          failure) emoji=":x:" ;;
+          warning) emoji=":warning:" ;;
+          *)       emoji=":information_source:" ;;
+        esac
+
+        fields_block=$(jq -c '
+          [.[] | "*\(.label)*\n\(.value)"] as $texts
+          | if ($texts | length) > 0
+            then [{type: "section", fields: [$texts[] | {type: "mrkdwn", text: .}]}]
+            else []
+            end
+        ' <<< "$NOTIFY_FIELDS_JSON")
+
+        link_block="[]"
+        if [ -n "$NOTIFY_LINK" ]; then
+          link_block=$(jq -n \
+            --arg url "$NOTIFY_LINK" \
+            --arg text "$NOTIFY_LINK_TEXT" \
+            '[{type: "actions", elements: [{type: "button", text: {type: "plain_text", text: $text}, url: $url}]}]')
+        fi
+
+        jq -n \
+          --arg emoji "$emoji" \
+          --arg title "$NOTIFY_TITLE" \
+          --arg summary "$NOTIFY_SUMMARY" \
+          --argjson fields "$fields_block" \
+          --argjson link_block "$link_block" \
+          '{
+            blocks: (
+              [{type: "section", text: {type: "mrkdwn", text: "\($emoji) *\($title)*\n\($summary)"}}]
+              + $fields
+              + $link_block
+            )
+          }' > "$RUNNER_TEMP/slack-payload.json"
+
+        cat "$RUNNER_TEMP/slack-payload.json"
+
+    - name: Post to Slack
+      uses: slackapi/slack-github-action@v2.0.0
+      with:
+        webhook: ${{ inputs.webhook-url }}
+        webhook-type: incoming-webhook
+        payload-file-path: ${{ runner.temp }}/slack-payload.json

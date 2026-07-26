@@ -1,0 +1,79 @@
+name: Project Digest
+
+# A repo + pipeline summary posted to Slack on a schedule — separate from
+# the agent workflows in agent-*.md (which post their own milestone
+# notifications) and from ci.yml/deploy.yml (which post per-run status).
+# This is the "what's the state of the world" digest.
+
+on:
+  schedule:
+    # After the research/dev agent sweeps in agent-research.md/agent-dev.md
+    # so the digest reflects same-day agent activity.
+    - cron: "0 17 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Gather repo + pipeline stats
+        id: stats
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          count_issues() {
+            gh issue list --label "$1" --state open --json number --jq 'length'
+          }
+          count_prs() {
+            gh pr list --label "$1" --state open --json number --jq 'length'
+          }
+
+          needs_spec=$(count_issues needs-spec)
+          spec_in_review=$(count_issues spec-in-review)
+          spec_approved=$(count_issues spec-approved)
+          changes_requested=$(count_prs changes-requested)
+          open_prs=$(gh pr list --state open --json number --jq 'length')
+
+          # PRs merged in the last 24h (gh pr list doesn't filter by
+          # mergedAt directly, so pull recent merged PRs and filter in jq).
+          merged_recently=$(gh pr list --state merged --limit 30 \
+            --json number,mergedAt \
+            --jq '[.[] | select((.mergedAt | fromdateiso8601) >= (now - 86400))] | length')
+
+          {
+            echo "needs_spec=$needs_spec"
+            echo "spec_in_review=$spec_in_review"
+            echo "spec_approved=$spec_approved"
+            echo "changes_requested=$changes_requested"
+            echo "open_prs=$open_prs"
+            echo "merged_recently=$merged_recently"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Notify Slack
+        if: secrets.SLACK_WEBHOOK_URL != ''
+        uses: ./.github/actions/slack-notify
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          status: info
+          title: "Daily project digest — ${{ github.repository }}"
+          summary: "Pipeline snapshot for `${{ github.repository }}` on `${{ github.ref_name }}`"
+          fields: |
+            [
+              {"label": "Awaiting spec", "value": "${{ steps.stats.outputs.needs_spec }} issue(s)"},
+              {"label": "Spec in review", "value": "${{ steps.stats.outputs.spec_in_review }} issue(s)"},
+              {"label": "Approved for dev", "value": "${{ steps.stats.outputs.spec_approved }} issue(s)"},
+              {"label": "Changes requested", "value": "${{ steps.stats.outputs.changes_requested }} PR(s)"},
+              {"label": "Open PRs", "value": "${{ steps.stats.outputs.open_prs }}"},
+              {"label": "Merged (last 24h)", "value": "${{ steps.stats.outputs.merged_recently }}"}
+            ]
+          link: "${{ github.server_url }}/${{ github.repository }}/issues"
+          link-text: "Open issues"

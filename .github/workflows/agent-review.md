@@ -32,6 +32,11 @@ safe-outputs:
       description: >
         Submit a PR review (approve or request changes) and update the
         linked GitHub Project item's status field accordingly.
+    - id: slack-notify
+      description: >
+        Post a milestone summary to the project's Slack channel via
+        .github/actions/slack-notify. Purely informational, no code/issue
+        write.
 
 timeout_minutes: 20
 ---
@@ -64,3 +69,14 @@ Target PR is `${{ github.event.pull_request.number }}` (or the
 
 Never approve a PR that removes or weakens tests without an explicit,
 justified reason stated in the PR description.
+
+## Slack notification
+
+After the `pr-review-decision` safe output, also emit `slack-notify` with:
+
+- `status: success` on approve, `warning` on request-changes
+- `title`: `"PR approved"` or `"Changes requested"` + the PR title
+- `summary`: link to the PR
+- `fields`: acceptance criteria met/total, and — on request-changes — a
+  short list of which criteria are unmet
+
