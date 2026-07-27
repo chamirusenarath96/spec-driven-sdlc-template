@@ -84,6 +84,12 @@ Full behavioral contracts live in `.claude/agents/`:
 Each is invoked by the matching workflow in `.github/workflows/agent-*.md`
 (see [WORKFLOWS.md](WORKFLOWS.md) for trigger details and budget controls).
 
+[CodeRabbit](https://coderabbit.ai) also reviews every PR (see
+[CODE_REVIEW.md](CODE_REVIEW.md)), but it's not part of this state machine —
+it's a general-purpose reviewer that leaves comments, not a gate. The Review
+Agent's `pr-review-decision` remains the only thing that moves a Project
+item to **Done**.
+
 ## Human checkpoints
 
 This pipeline is agent-run, not agent-only. Two points are deliberately left

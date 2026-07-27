@@ -16,9 +16,10 @@ GitHub Projects (v2), and GitHub Actions.
 | Ticket/PM tool | **GitHub Issues + Projects (v2)** — no separate tool; see [docs/AGENTS.md#raising-issues](docs/AGENTS.md#raising-issues) |
 | Research / Dev / Review agent personas | [`.claude/agents/`](.claude/agents/) |
 | Agentic workflows (scheduled + event-triggered) | [`.github/workflows/agent-*.md`](.github/workflows/) (GitHub Agentic Workflows / `gh-aw`) |
+| General-purpose PR code review (complements the Review Agent) | [CodeRabbit](https://coderabbit.ai) via [`.coderabbit.yaml`](.coderabbit.yaml) — see [docs/CODE_REVIEW.md](docs/CODE_REVIEW.md) |
 | CI, deploy, perf, digest, and agent milestones → Slack | [`ci.yml`](.github/workflows/ci.yml), [`deploy.yml`](.github/workflows/deploy.yml), [`perf.yml`](.github/workflows/perf.yml), [`project-digest.yml`](.github/workflows/project-digest.yml), [`agent-notify.yml`](.github/workflows/agent-notify.yml), via one shared [`slack-notify` action](.github/actions/slack-notify/action.yml) |
 | Project board state machine | [`docs/PROJECT_SETUP.md`](docs/PROJECT_SETUP.md) |
-| Full pipeline docs | [`docs/AGENTS.md`](docs/AGENTS.md), [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md) |
+| Full pipeline docs | [`docs/AGENTS.md`](docs/AGENTS.md), [`docs/WORKFLOWS.md`](docs/WORKFLOWS.md), [`docs/CODE_REVIEW.md`](docs/CODE_REVIEW.md) |
 | Getting started | [`docs/SETUP.md`](docs/SETUP.md) — tool-by-tool checklist with expected results at each step |
 | Every key/secret this repo uses | [`.env.example`](.env.example) — one file listing what each is for and where it's actually consumed |
 
@@ -246,6 +247,13 @@ Every caller checks `secrets.SLACK_WEBHOOK_URL != ''` first — skip setting
 the secret and every notification silently no-ops instead of failing the
 workflow. See [`.env.example`](.env.example) for every key/secret this repo
 uses in one place.
+
+There's a sixth Slack source that deliberately bypasses all of the above:
+[CodeRabbit](https://coderabbit.ai) (see
+[docs/CODE_REVIEW.md](docs/CODE_REVIEW.md)) posts its own PR review
+summaries to Slack once you connect it in *its own* dashboard — it doesn't
+call `slack-notify` or use `SLACK_WEBHOOK_URL`, since that's a separate,
+natively-supported integration on CodeRabbit's side.
 
 ## Status
 

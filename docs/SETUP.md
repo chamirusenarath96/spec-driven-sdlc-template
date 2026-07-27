@@ -15,6 +15,7 @@ later steps assume earlier ones actually succeeded.
 | Claude Code (via `claude-code-action` under the hood) | Runs the three agent personas | An `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` secret — no local install needed, it runs in Actions |
 | Slack incoming webhook | Where CI/deploy/perf/digest/agent notifications land | A Slack workspace you can add an app to |
 | GitHub Projects (v2) | The pipeline's state machine / board | Nothing to install — a few clicks on github.com |
+| [CodeRabbit](https://coderabbit.ai) (optional) | General-purpose automated code review on every PR, complementing the Review Agent — see [CODE_REVIEW.md](CODE_REVIEW.md) | Install the GitHub App at coderabbit.ai (your GitHub login, an OAuth-style grant only you can authorize) |
 
 Nothing above is optional if you want the full pipeline working — but you
 can stop after step 3 and just have a normal CI-only repo with none of the
@@ -134,16 +135,36 @@ Follow [PROJECT_SETUP.md](PROJECT_SETUP.md) to create the board, the
 **Expect:** a Project (v2) linked to the repo with the 8 Status options
 listed in [AGENTS.md](AGENTS.md#state-machine).
 
-## 8. Set branch protection (recommended)
+## 8. Install CodeRabbit (optional but recommended)
+
+`.coderabbit.yaml` is already committed, configured to complement the
+Review Agent rather than compete with it (no auto-approve, spec-only PRs
+skipped) — see [CODE_REVIEW.md](CODE_REVIEW.md) for why. Two things happen
+outside this repo, in CodeRabbit's own dashboard, and need your account
+access:
+
+1. Install the GitHub App at [coderabbit.ai](https://coderabbit.ai) (sign in
+   with GitHub, grant it access to this repo).
+2. Optionally connect the same Slack channel from step 5, under CodeRabbit's
+   own Integrations settings — this is separate from `SLACK_WEBHOOK_URL` and
+   doesn't go through this repo's `slack-notify` action.
+
+**Expect:** CodeRabbit leaves a review comment on the next PR you open,
+within a minute or two of it opening.
+
+## 9. Set branch protection (recommended)
 
 Require the `test` job from `ci.yml` to pass before merge, and decide
 whether the Review Agent is allowed to merge directly (see
-[AGENTS.md](AGENTS.md#human-checkpoints)) or should only approve.
+[AGENTS.md](AGENTS.md#human-checkpoints)) or should only approve. If you
+flipped `.coderabbit.yaml`'s `request_changes_workflow` to `true` (see
+[CODE_REVIEW.md](CODE_REVIEW.md#why-coderabbit-doesnt-auto-approve-here)),
+add CodeRabbit's check as required too.
 
 **Expect:** the `test` status check listed as required in
 Settings → Branches.
 
-## 9. Smoke-test the pipeline
+## 10. Smoke-test the pipeline
 
 1. Open an issue using the **Feature request** template (auto-labeled
    `needs-spec`) — this is how a feature/ticket gets raised in the first
@@ -185,6 +206,9 @@ common cause of "the agent said it did X but nothing changed."
 - No Slack channel is created for you — step 5 is manual, once.
 - No live GitHub Project is created for you (Projects have no
   template-repository equivalent) — step 7 is manual, once, per project.
+- CodeRabbit's GitHub App isn't installed for you — step 8 requires an
+  OAuth-style grant only you can authorize, and its Slack connection lives
+  in CodeRabbit's own dashboard, not in this repo.
 - No Copier CLI wiring for "ask questions, generate a stack-specific
   variant" — see the suggested build order in the original research doc
   (`docs/ARCHITECTURE.md`'s design notes): extract this template into a

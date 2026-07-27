@@ -1,0 +1,70 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+#
+# Config for CodeRabbit (https://coderabbit.ai) — a hosted GitHub App that
+# does automatic, general-purpose code review (bugs, security, style) on
+# every PR. It is a COMPLEMENT to this repo's own Review Agent
+# (.claude/agents/review-agent.md), not a replacement:
+#
+#   - CodeRabbit: general code quality/security review, inline comments,
+#     runs the moment a PR opens, no knowledge of this repo's specs.
+#   - Review Agent: gates merge against the linked spec's acceptance
+#     criteria (specs/NNN-slug/spec.md) and moves the GitHub Project item.
+#
+# CodeRabbit does NOT auto-approve here (request_changes_workflow: false)
+# — the Review Agent remains the actual merge gate. See
+# docs/CODE_REVIEW.md for the full setup (installing the GitHub App and
+# connecting Slack both happen in CodeRabbit's own dashboard, not here).
+
+language: "en-US"
+
+reviews:
+  profile: chill
+  request_changes_workflow: false
+  high_level_summary: true
+
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - "main"
+    # The Research Agent's spec-only PRs (agent-research.md sets
+    # title-prefix: "spec: ") have no code to review — skip them.
+    ignore_title_keywords:
+      - "spec:"
+
+  # specs/ and .specify/ are spec-kit artifacts (markdown, not application
+  # code); docs/ is this template's own documentation. Nothing here is
+  # inherently exempt from good writing, but it's not what CodeRabbit is
+  # for — leave it to the Review Agent, which already reads spec.md
+  # directly against the diff.
+  path_filters:
+    - "!specs/**"
+    - "!.specify/**"
+    - "!docs/**"
+
+  path_instructions:
+    - path: "**/*"
+      instructions: >
+        This repository runs a spec-driven, agent-run SDLC (see
+        docs/AGENTS.md). If a PR description links a specs/NNN-slug/
+        directory, treat that spec's acceptance criteria as the source of
+        truth for intended behavior — flag places the diff appears to
+        contradict the spec, but do not treat spec conformance as your
+        primary job; that's the repo's own Review Agent's role. Focus on
+        code quality, correctness, and security.
+
+  tools:
+    gitleaks:
+      enabled: true
+
+  finishing_touches:
+    docstrings:
+      enabled: true
+    unit_tests:
+      # The Dev Agent already writes tests per each spec's tasks.md
+      # (.claude/agents/dev-agent.md) — avoid generating a second,
+      # potentially conflicting set.
+      enabled: false
+
+chat:
+  auto_reply: true
